@@ -35,7 +35,7 @@ plt.ylabel("Count")
 
 plt.show()
 
-#voltage plot
+#voltage distribution
 plt.figure(figsize=(8,5))
 
 sns.histplot(df["voltage"], bins=20, color="orange", kde=True)
@@ -47,7 +47,7 @@ plt.ylabel("Count")
 plt.show()
 
 
-#temperature plot
+#temperature distribution
 plt.figure(figsize=(8,5))
 
 sns.histplot(df["temperature"], bins=20, color="red", kde=True)
