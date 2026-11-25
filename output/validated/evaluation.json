@@ -1,0 +1,45 @@
+{
+  "rf_unseen_batteries": {
+    "MAE": 0.06049196543686409,
+    "MSE": 0.01259117141859243,
+    "RMSE": 0.11221038908493469,
+    "R2": 0.15929139092182887,
+    "macro_battery_MAE": 0.05447196762587702,
+    "records": 277,
+    "batteries": 7
+  },
+  "rf_later_cycles": {
+    "MAE": 0.02995126022393943,
+    "MSE": 0.0016977345876830862,
+    "RMSE": 0.041203574938142036,
+    "R2": 0.880148822529434,
+    "macro_battery_MAE": 0.0342363325575684,
+    "records": 233,
+    "batteries": 20
+  },
+  "selected_unseen_batteries": {
+    "MAE": 0.06049196543686409,
+    "MSE": 0.01259117141859243,
+    "RMSE": 0.11221038908493469,
+    "R2": 0.15929139092182887,
+    "macro_battery_MAE": 0.05447196762587702,
+    "records": 277,
+    "batteries": 7
+  },
+  "mean_unseen_batteries": {
+    "MAE": 0.10427078997443437,
+    "MSE": 0.015043509488207053,
+    "RMSE": 0.12265198525995025,
+    "R2": -0.004450461123072902,
+    "macro_battery_MAE": 0.12600985906857756,
+    "records": 277,
+    "batteries": 7
+  },
+  "sensor_only_rf_unseen_batteries": {
+    "MAE": 0.06322470806607987,
+    "MSE": 0.011393484931244573,
+    "RMSE": 0.10674026855523915,
+    "R2": 0.2392605460874171,
+    "note": "Fixed RF settings; exploratory ablation, not an independently tuned sensor-only model."
+  }
+}

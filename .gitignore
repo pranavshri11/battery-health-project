@@ -17,3 +17,7 @@ __pycache__/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Local analysis scratch and test caches
+tmp/
+.pytest_cache/

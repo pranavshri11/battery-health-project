@@ -1,0 +1,338 @@
+{
+  "schema_version": 1,
+  "model_name": "Random Forest",
+  "rf_selection": "Tuned Random Forest",
+  "selected_comparison_model": "Tuned Random Forest",
+  "features": [
+    "cycle",
+    "voltage",
+    "temperature",
+    "capacity"
+  ],
+  "target": "soh",
+  "target_unit": "ratio",
+  "target_definition": "capacity / first observed capacity per battery",
+  "created_at_utc": "2026-11-25T07:50:06.008875+00:00",
+  "seed": 42,
+  "dataset_sha256": "96bd7cdc54ce19ae36f4b1cb0027438783abb26be835ff92069cfb6fadd2c251",
+  "artifact_sha256": "ca99b89006437f5d699121df6e553a3bab4e7d9cd2947e0a96d64a3d0760e24c",
+  "python_version": "3.14.6",
+  "package_versions": {
+    "scikit-learn": "1.9.0",
+    "pandas": "3.0.5",
+    "numpy": "2.5.1",
+    "joblib": "1.5.3",
+    "xgboost": "3.4.1",
+    "streamlit": "1.61.1"
+  },
+  "rf_parameters": {
+    "bootstrap": true,
+    "ccp_alpha": 0.0,
+    "criterion": "squared_error",
+    "max_depth": 20,
+    "max_features": "sqrt",
+    "max_leaf_nodes": null,
+    "max_samples": null,
+    "min_impurity_decrease": 0.0,
+    "min_samples_leaf": 4,
+    "min_samples_split": 2,
+    "min_weight_fraction_leaf": 0.0,
+    "monotonic_cst": null,
+    "n_estimators": 200,
+    "n_jobs": 1,
+    "oob_score": false,
+    "random_state": 42,
+    "verbose": 0,
+    "warm_start": false
+  },
+  "development_batteries": [
+    "B0005",
+    "B0006",
+    "B0007",
+    "B0018",
+    "B0025",
+    "B0026",
+    "B0027",
+    "B0028",
+    "B0030",
+    "B0031",
+    "B0032",
+    "B0033",
+    "B0034",
+    "B0036",
+    "B0039",
+    "B0040",
+    "B0041",
+    "B0043",
+    "B0045",
+    "B0046",
+    "B0048",
+    "B0051",
+    "B0052",
+    "B0053",
+    "B0054",
+    "B0055",
+    "B0056"
+  ],
+  "holdout_batteries": [
+    "B0029",
+    "B0038",
+    "B0042",
+    "B0044",
+    "B0047",
+    "B0049",
+    "B0050"
+  ],
+  "split_counts": {
+    "development": 1138,
+    "unseen_batteries": 277,
+    "development_early": 905,
+    "development_later": 233
+  },
+  "selection_protocol": "Minimum mean MAE in grouped CV on early development cycles only. Scaling is fitted inside every fold.",
+  "unseen_protocol": "Refit on all development cycles, evaluate on complete held-out batteries; never fit on held-out batteries.",
+  "temporal_protocol": "Fit on the earliest 80% of each development battery, evaluate on its remaining later cycles. Single-cycle batteries are training-only.",
+  "cv_folds": [
+    {
+      "fold": 0,
+      "train_batteries": [
+        "B0005",
+        "B0006",
+        "B0018",
+        "B0027",
+        "B0028",
+        "B0031",
+        "B0032",
+        "B0033",
+        "B0034",
+        "B0036",
+        "B0039",
+        "B0041",
+        "B0043",
+        "B0045",
+        "B0046",
+        "B0048",
+        "B0051",
+        "B0052",
+        "B0053",
+        "B0055",
+        "B0056"
+      ],
+      "validation_batteries": [
+        "B0007",
+        "B0025",
+        "B0026",
+        "B0030",
+        "B0040",
+        "B0054"
+      ]
+    },
+    {
+      "fold": 1,
+      "train_batteries": [
+        "B0006",
+        "B0007",
+        "B0018",
+        "B0025",
+        "B0026",
+        "B0027",
+        "B0030",
+        "B0031",
+        "B0033",
+        "B0034",
+        "B0039",
+        "B0040",
+        "B0041",
+        "B0043",
+        "B0045",
+        "B0046",
+        "B0048",
+        "B0051",
+        "B0053",
+        "B0054",
+        "B0055"
+      ],
+      "validation_batteries": [
+        "B0005",
+        "B0028",
+        "B0032",
+        "B0036",
+        "B0052",
+        "B0056"
+      ]
+    },
+    {
+      "fold": 2,
+      "train_batteries": [
+        "B0005",
+        "B0007",
+        "B0018",
+        "B0025",
+        "B0026",
+        "B0027",
+        "B0028",
+        "B0030",
+        "B0031",
+        "B0032",
+        "B0033",
+        "B0036",
+        "B0039",
+        "B0040",
+        "B0043",
+        "B0045",
+        "B0046",
+        "B0048",
+        "B0051",
+        "B0052",
+        "B0054",
+        "B0055",
+        "B0056"
+      ],
+      "validation_batteries": [
+        "B0006",
+        "B0034",
+        "B0041",
+        "B0053"
+      ]
+    },
+    {
+      "fold": 3,
+      "train_batteries": [
+        "B0005",
+        "B0006",
+        "B0007",
+        "B0025",
+        "B0026",
+        "B0027",
+        "B0028",
+        "B0030",
+        "B0032",
+        "B0034",
+        "B0036",
+        "B0039",
+        "B0040",
+        "B0041",
+        "B0043",
+        "B0045",
+        "B0048",
+        "B0052",
+        "B0053",
+        "B0054",
+        "B0056"
+      ],
+      "validation_batteries": [
+        "B0018",
+        "B0031",
+        "B0033",
+        "B0046",
+        "B0051",
+        "B0055"
+      ]
+    },
+    {
+      "fold": 4,
+      "train_batteries": [
+        "B0005",
+        "B0006",
+        "B0007",
+        "B0018",
+        "B0025",
+        "B0026",
+        "B0028",
+        "B0030",
+        "B0031",
+        "B0032",
+        "B0033",
+        "B0034",
+        "B0036",
+        "B0040",
+        "B0041",
+        "B0046",
+        "B0051",
+        "B0052",
+        "B0053",
+        "B0054",
+        "B0055",
+        "B0056"
+      ],
+      "validation_batteries": [
+        "B0027",
+        "B0039",
+        "B0043",
+        "B0045",
+        "B0048"
+      ]
+    }
+  ],
+  "training_ranges": {
+    "cycle": {
+      "min": 1.0,
+      "max": 168.0
+    },
+    "voltage": {
+      "min": 3.0457610453739106,
+      "max": 3.7530265184592335
+    },
+    "temperature": {
+      "min": 7.684549736519659,
+      "max": 54.99737199703748
+    },
+    "capacity": {
+      "min": 0.520104892932856,
+      "max": 2.4989960513448937
+    }
+  },
+  "metrics": {
+    "rf_unseen_batteries": {
+      "MAE": 0.06049196543686409,
+      "MSE": 0.01259117141859243,
+      "RMSE": 0.11221038908493469,
+      "R2": 0.15929139092182887,
+      "macro_battery_MAE": 0.05447196762587702,
+      "records": 277,
+      "batteries": 7
+    },
+    "rf_later_cycles": {
+      "MAE": 0.02995126022393943,
+      "MSE": 0.0016977345876830862,
+      "RMSE": 0.041203574938142036,
+      "R2": 0.880148822529434,
+      "macro_battery_MAE": 0.0342363325575684,
+      "records": 233,
+      "batteries": 20
+    },
+    "selected_unseen_batteries": {
+      "MAE": 0.06049196543686409,
+      "MSE": 0.01259117141859243,
+      "RMSE": 0.11221038908493469,
+      "R2": 0.15929139092182887,
+      "macro_battery_MAE": 0.05447196762587702,
+      "records": 277,
+      "batteries": 7
+    },
+    "mean_unseen_batteries": {
+      "MAE": 0.10427078997443437,
+      "MSE": 0.015043509488207053,
+      "RMSE": 0.12265198525995025,
+      "R2": -0.004450461123072902,
+      "macro_battery_MAE": 0.12600985906857756,
+      "records": 277,
+      "batteries": 7
+    },
+    "sensor_only_rf_unseen_batteries": {
+      "MAE": 0.06322470806607987,
+      "MSE": 0.011393484931244573,
+      "RMSE": 0.10674026855523915,
+      "R2": 0.2392605460874171,
+      "note": "Fixed RF settings; exploratory ablation, not an independently tuned sensor-only model."
+    }
+  },
+  "limitations": [
+    "For this CSV, SOH equals capacity divided by the battery's first observed capacity.",
+    "Capacity is target-related: this is capacity-informed SOH estimation, not independent sensor-only forecasting.",
+    "RUL equals final observed cycle minus current cycle; it is not verified physical end-of-life.",
+    "SOH above 1 is retained without clipping; first observed capacity is not necessarily rated capacity.",
+    "Original raw NASA files, extraction code, and licensing evidence are not present in this repository."
+  ],
+  "artifact_policy": "The app serves the validated RF, even if another model wins CV. Legacy model/scaler files are unchanged for historical reproduction."
+}

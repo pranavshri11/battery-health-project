@@ -1,215 +1,180 @@
-import os
+"""Compare and tune only on development data, then evaluate frozen selections."""
+
+import argparse
+from datetime import datetime, timezone
+import importlib.metadata
+import json
+from pathlib import Path
+import platform
+
 import joblib
+import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-
-from sklearn.linear_model import LinearRegression
-from sklearn.linear_model import Ridge
-from sklearn.linear_model import Lasso
-
+from sklearn.base import clone
+from sklearn.dummy import DummyRegressor
+from sklearn.ensemble import ExtraTreesRegressor, GradientBoostingRegressor, RandomForestRegressor
+from sklearn.linear_model import Lasso, LinearRegression, Ridge
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.model_selection import GroupKFold, RandomizedSearchCV, cross_validate
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeRegressor
 
-from sklearn.ensemble import (
-    RandomForestRegressor,
-    ExtraTreesRegressor,
-    GradientBoostingRegressor
-)
+try:
+    from .data_preprocessing import DATASET, FEATURES, ROOT, data_report, dataset_sha256, load_dataset, sha256
+    from .feature_engineering import make_splits, split_manifest
+except ImportError:
+    from data_preprocessing import DATASET, FEATURES, ROOT, data_report, dataset_sha256, load_dataset, sha256
+    from feature_engineering import make_splits, split_manifest
 
-from xgboost import XGBRegressor
 
-from sklearn.metrics import (
-    mean_absolute_error,
-    mean_squared_error,
-    r2_score
-)
+def make_pipeline(estimator):
+    return Pipeline([("scaler", StandardScaler()), ("regressor", estimator)])
 
-# =====================================================
-# Load Data
-# =====================================================
 
-X_train = pd.read_csv("output/X_train.csv")
-X_test = pd.read_csv("output/X_test.csv")
+def model_candidates(seed=42):
+    from xgboost import XGBRegressor
+    return {
+        "Mean baseline": DummyRegressor(strategy="mean"),
+        "Linear Regression": LinearRegression(),
+        "Ridge Regression": Ridge(alpha=1.0),
+        "Lasso Regression": Lasso(alpha=0.001, max_iter=10000),
+        "Decision Tree": DecisionTreeRegressor(random_state=seed),
+        "Random Forest": RandomForestRegressor(n_estimators=100, random_state=seed, n_jobs=1),
+        "Extra Trees": ExtraTreesRegressor(n_estimators=100, random_state=seed, n_jobs=1),
+        "Gradient Boosting": GradientBoostingRegressor(random_state=seed),
+        "XGBoost": XGBRegressor(objective="reg:squarederror", n_estimators=100, random_state=seed, n_jobs=1),
+    }
 
-y_train = pd.read_csv("output/y_train.csv").squeeze()
-y_test = pd.read_csv("output/y_test.csv").squeeze()
 
-print("=" * 70)
-print("BATTERY HEALTH PREDICTION - MODEL COMPARISON")
-print("=" * 70)
+def metrics(actual, predicted):
+    return {"MAE": float(mean_absolute_error(actual, predicted)),
+            "MSE": float(mean_squared_error(actual, predicted)),
+            "RMSE": float(np.sqrt(mean_squared_error(actual, predicted))),
+            "R2": float(r2_score(actual, predicted)) if len(actual) > 1 and np.var(actual) > 0 else None}
 
-# =====================================================
-# Models
-# =====================================================
 
-models = {
+def evaluate(pipeline, data, label, output):
+    prediction = pipeline.predict(data[FEATURES])
+    result = metrics(data["soh"], prediction)
+    rows = data[["battery_id", "cycle", "soh"]].copy()
+    rows["predicted_soh"] = prediction
+    rows["residual"] = rows["soh"] - prediction
+    rows.to_csv(output / f"{label}_predictions.csv", index=False)
+    grouped = []
+    for battery, part in rows.groupby("battery_id"):
+        grouped.append({"battery_id": battery, "records": len(part), **metrics(part["soh"], part["predicted_soh"])})
+    pd.DataFrame(grouped).to_csv(output / f"{label}_per_battery.csv", index=False)
+    result["macro_battery_MAE"] = float(np.mean([row["MAE"] for row in grouped]))
+    result["records"] = len(data)
+    result["batteries"] = int(data["battery_id"].nunique())
+    return result
 
-    "Linear Regression":
-        LinearRegression(),
 
-    "Ridge Regression":
-        Ridge(alpha=1.0),
+def train(dataset=DATASET, output=ROOT / "output" / "validated", model_dir=ROOT / "models", seed=42, jobs=2, search_iterations=12):
+    output, model_dir = Path(output), Path(model_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    model_dir.mkdir(parents=True, exist_ok=True)
+    data = load_dataset(dataset)
+    report = data_report(data, dataset)
+    (output / "data_quality.json").write_text(json.dumps(report, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+    splits = make_splits(data, seed=seed)
+    split_manifest(data, splits).to_csv(output / "split_manifest.csv", index=False)
+    early = data.iloc[splits["development_early"]]
+    later = data.iloc[splits["development_later"]]
+    development = data.iloc[splits["development"]]
+    unseen = data.iloc[splits["unseen_batteries"]]
+    X, y, groups = early[FEATURES], early["soh"], early["battery_id"]
+    fold_indices = list(GroupKFold(n_splits=min(5, groups.nunique())).split(X, y, groups))
+    fold_manifest = [{"fold": number, "train_batteries": sorted(set(groups.iloc[tr])),
+                      "validation_batteries": sorted(set(groups.iloc[va]))}
+                     for number, (tr, va) in enumerate(fold_indices)]
+    candidates = {name: make_pipeline(estimator) for name, estimator in model_candidates(seed).items()}
+    rows = []
+    for name, candidate in candidates.items():
+        print(f"Grouped CV: {name}", flush=True)
+        scores = cross_validate(candidate, X, y, cv=fold_indices, scoring={"MAE": "neg_mean_absolute_error", "R2": "r2"}, n_jobs=jobs, error_score="raise")
+        rows.append({"Model": name, "CV MAE": float(-scores["test_MAE"].mean()),
+                     "CV MAE std": float(scores["test_MAE"].std()), "CV R2": float(scores["test_R2"].mean())})
 
-    "Lasso Regression":
-        Lasso(alpha=0.001),
+    print("Tuning Random Forest inside grouped CV (early development cycles only)", flush=True)
+    search = RandomizedSearchCV(candidates["Random Forest"], {
+        "regressor__n_estimators": [100, 200], "regressor__max_depth": [None, 10, 20],
+        "regressor__min_samples_leaf": [1, 2, 4], "regressor__max_features": [1.0, "sqrt"],
+    }, n_iter=search_iterations, random_state=seed, cv=fold_indices,
+        scoring={"MAE": "neg_mean_absolute_error", "R2": "r2"}, n_jobs=jobs, error_score="raise", refit="MAE")
+    search.fit(X, y)
+    pd.DataFrame(search.cv_results_).to_csv(output / "rf_tuning.csv", index=False)
+    candidates["Tuned Random Forest"] = clone(search.best_estimator_)
+    rows.append({"Model": "Tuned Random Forest", "CV MAE": float(-search.best_score_),
+                 "CV MAE std": float(search.cv_results_["std_test_MAE"][search.best_index_]),
+                 "CV R2": float(search.cv_results_["mean_test_R2"][search.best_index_])})
+    comparison = pd.DataFrame(rows).sort_values("CV MAE", kind="stable").reset_index(drop=True)
+    comparison.to_csv(output / "model_comparison.csv", index=False)
+    best_name = comparison.iloc[0]["Model"]
+    rf_name = comparison[comparison["Model"].isin(["Random Forest", "Tuned Random Forest"])].iloc[0]["Model"]
 
-    "Decision Tree":
-        DecisionTreeRegressor(random_state=42),
+    # Selection is now frozen. Neither later-cycle nor unseen-battery labels were used above.
+    temporal_model = clone(candidates[rf_name]).fit(X, y)
+    temporal = evaluate(temporal_model, later, "rf_later_cycles", output)
+    joblib.dump(temporal_model, model_dir / "temporal_rf_pipeline.joblib", compress=3)
+    rf = clone(candidates[rf_name]).fit(development[FEATURES], development["soh"])
+    unseen_metrics = evaluate(rf, unseen, "rf_unseen_batteries", output)
+    best = clone(candidates[best_name]).fit(development[FEATURES], development["soh"])
+    selected_metrics = evaluate(best, unseen, "selected_unseen_batteries", output)
+    mean_baseline = make_pipeline(DummyRegressor()).fit(development[FEATURES], development["soh"])
+    baseline_metrics = evaluate(mean_baseline, unseen, "mean_unseen_batteries", output)
 
-    "Random Forest":
-        RandomForestRegressor(
-            n_estimators=100,
-            random_state=42
-        ),
+    # This ablation reveals how much the capacity-derived target contributes to the task.
+    sensor_features = ["cycle", "voltage", "temperature"]
+    sensor_model = clone(candidates[rf_name]).fit(development[sensor_features], development["soh"])
+    sensor_metrics = metrics(unseen["soh"], sensor_model.predict(unseen[sensor_features]))
+    sensor_metrics["note"] = "Fixed RF settings; exploratory ablation, not an independently tuned sensor-only model."
 
-    "Extra Trees":
-        ExtraTreesRegressor(
-            n_estimators=100,
-            random_state=42
-        ),
+    artifact = model_dir / "random_forest_pipeline.joblib"
+    joblib.dump(rf, artifact, compress=3)
+    joblib.dump(best, model_dir / "selected_model_pipeline.joblib", compress=3)
+    metadata = {
+        "schema_version": 1, "model_name": "Random Forest", "rf_selection": rf_name,
+        "selected_comparison_model": best_name, "features": FEATURES,
+        "target": "soh", "target_unit": "ratio", "target_definition": "capacity / first observed capacity per battery",
+        "created_at_utc": datetime.now(timezone.utc).isoformat(), "seed": seed,
+        "dataset_sha256": dataset_sha256(dataset), "artifact_sha256": sha256(artifact),
+        "python_version": platform.python_version(),
+        "package_versions": {name: importlib.metadata.version(name) for name in ["scikit-learn", "pandas", "numpy", "joblib", "xgboost", "streamlit"]},
+        "rf_parameters": rf.named_steps["regressor"].get_params(),
+        "development_batteries": sorted(set(development["battery_id"])),
+        "holdout_batteries": sorted(set(unseen["battery_id"])),
+        "split_counts": {key: len(value) for key, value in splits.items()},
+        "selection_protocol": "Minimum mean MAE in grouped CV on early development cycles only. Scaling is fitted inside every fold.",
+        "unseen_protocol": "Refit on all development cycles, evaluate on complete held-out batteries; never fit on held-out batteries.",
+        "temporal_protocol": "Fit on the earliest 80% of each development battery, evaluate on its remaining later cycles. Single-cycle batteries are training-only.",
+        "cv_folds": fold_manifest,
+        "training_ranges": {key: {"min": float(development[key].min()), "max": float(development[key].max())} for key in FEATURES},
+        "metrics": {"rf_unseen_batteries": unseen_metrics, "rf_later_cycles": temporal,
+                    "selected_unseen_batteries": selected_metrics, "mean_unseen_batteries": baseline_metrics,
+                    "sensor_only_rf_unseen_batteries": sensor_metrics},
+        "limitations": report["interpretation"],
+        "artifact_policy": "The app serves the validated RF, even if another model wins CV. Legacy model/scaler files are unchanged for historical reproduction.",
+    }
+    (model_dir / "model_metadata.json").write_text(json.dumps(metadata, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+    (output / "evaluation.json").write_text(json.dumps(metadata["metrics"], indent=2, allow_nan=False) + "\n", encoding="utf-8")
+    print(comparison.to_string(index=False), flush=True)
+    print(json.dumps(metadata["metrics"], indent=2, allow_nan=False), flush=True)
+    return metadata
 
-    "Gradient Boosting":
-        GradientBoostingRegressor(
-            random_state=42
-        ),
 
-    "XGBoost":
-        XGBRegressor(
-            objective="reg:squarederror",
-            n_estimators=100,
-            random_state=42
-        )
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--dataset", type=Path, default=DATASET)
+    parser.add_argument("--output", type=Path, default=ROOT / "output" / "validated")
+    parser.add_argument("--models", type=Path, default=ROOT / "models")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--jobs", type=int, default=2)
+    parser.add_argument("--search-iterations", type=int, default=12)
+    args = parser.parse_args()
+    train(args.dataset, args.output, args.models, args.seed, args.jobs, args.search_iterations)
 
-}
 
-# =====================================================
-# Train Models
-# =====================================================
-
-results = []
-
-best_model = None
-best_name = ""
-best_score = -999
-
-for name, model in models.items():
-
-    print(f"\nTraining {name}...")
-
-    model.fit(X_train, y_train)
-
-    prediction = model.predict(X_test)
-
-    mae = mean_absolute_error(y_test, prediction)
-
-    mse = mean_squared_error(y_test, prediction)
-
-    rmse = mse ** 0.5
-
-    r2 = r2_score(y_test, prediction)
-
-    results.append([
-        name,
-        mae,
-        mse,
-        rmse,
-        r2
-    ])
-
-    if r2 > best_score:
-
-        best_score = r2
-
-        best_model = model
-
-        best_name = name
-
-# =====================================================
-# Results Table
-# =====================================================
-
-results_df = pd.DataFrame(
-    results,
-    columns=[
-        "Model",
-        "MAE",
-        "MSE",
-        "RMSE",
-        "R2 Score"
-    ]
-)
-
-results_df = results_df.sort_values(
-    by="R2 Score",
-    ascending=False
-)
-
-print("\n")
-print("=" * 70)
-print("MODEL COMPARISON")
-print("=" * 70)
-
-print(results_df)
-
-# =====================================================
-# Save CSV
-# =====================================================
-
-os.makedirs("output", exist_ok=True)
-
-results_df.to_csv(
-    "output/model_comparison.csv",
-    index=False
-)
-
-# =====================================================
-# Save Best Model
-# =====================================================
-
-os.makedirs("models", exist_ok=True)
-
-joblib.dump(
-    best_model,
-    "models/best_model.pkl"
-)
-
-print("\nBest Model :", best_name)
-
-print("Best R² :", round(best_score,4))
-
-# =====================================================
-# Accuracy Graph
-# =====================================================
-
-plt.figure(figsize=(12,6))
-
-plt.bar(
-    results_df["Model"],
-    results_df["R2 Score"]
-)
-
-plt.xticks(rotation=25)
-
-plt.ylabel("R² Score")
-
-plt.title("Machine Learning Model Comparison")
-
-plt.tight_layout()
-
-plt.savefig(
-    "output/model_comparison.png",
-    dpi=300
-)
-
-plt.show()
-
-print("\nGraph Saved")
-
-print("output/model_comparison.png")
-
-print("\nBest Model Saved")
-
-print("models/best_model.pkl")
-
-print("=" * 70)
-print("PHASE 9 COMPLETED")
-print("=" * 70)
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,96 @@
+{
+  "source_sha256": "96bd7cdc54ce19ae36f4b1cb0027438783abb26be835ff92069cfb6fadd2c251",
+  "rows": 1415,
+  "batteries": 34,
+  "columns": [
+    "battery_id",
+    "cycle",
+    "voltage",
+    "temperature",
+    "capacity",
+    "soh",
+    "rul"
+  ],
+  "missing_values": {
+    "battery_id": 0,
+    "cycle": 0,
+    "voltage": 0,
+    "temperature": 0,
+    "capacity": 0,
+    "soh": 0,
+    "rul": 0
+  },
+  "duplicate_battery_cycles": 0,
+  "ranges": {
+    "cycle": {
+      "min": 1.0,
+      "max": 168.0
+    },
+    "voltage": {
+      "min": 2.5300104336765608,
+      "max": 3.7530265184592335
+    },
+    "temperature": {
+      "min": 7.684549736519659,
+      "max": 54.99737199703748
+    },
+    "capacity": {
+      "min": 0.520104892932856,
+      "max": 2.4989960513448937
+    },
+    "soh": {
+      "min": 0.604448676087178,
+      "max": 1.0485271606255615
+    },
+    "rul": {
+      "min": 0.0,
+      "max": 167.0
+    }
+  },
+  "records_per_battery": {
+    "B0005": 168,
+    "B0006": 155,
+    "B0007": 168,
+    "B0018": 132,
+    "B0025": 5,
+    "B0026": 18,
+    "B0027": 14,
+    "B0028": 27,
+    "B0029": 32,
+    "B0030": 34,
+    "B0031": 21,
+    "B0032": 29,
+    "B0033": 3,
+    "B0034": 1,
+    "B0036": 1,
+    "B0038": 1,
+    "B0039": 11,
+    "B0040": 2,
+    "B0041": 25,
+    "B0042": 99,
+    "B0043": 66,
+    "B0044": 66,
+    "B0045": 70,
+    "B0046": 69,
+    "B0047": 69,
+    "B0048": 69,
+    "B0049": 8,
+    "B0050": 2,
+    "B0051": 1,
+    "B0052": 1,
+    "B0053": 45,
+    "B0054": 1,
+    "B0055": 1,
+    "B0056": 1
+  },
+  "soh_above_one": 124,
+  "soh_formula_max_absolute_error": 4.440892098500626e-16,
+  "rul_endpoint_formula_max_absolute_error": 0.0,
+  "interpretation": [
+    "For this CSV, SOH equals capacity divided by the battery's first observed capacity.",
+    "Capacity is target-related: this is capacity-informed SOH estimation, not independent sensor-only forecasting.",
+    "RUL equals final observed cycle minus current cycle; it is not verified physical end-of-life.",
+    "SOH above 1 is retained without clipping; first observed capacity is not necessarily rated capacity.",
+    "Original raw NASA files, extraction code, and licensing evidence are not present in this repository."
+  ]
+}
